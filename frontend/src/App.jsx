@@ -16,12 +16,10 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [highlightedSource, setHighlightedSource] = useState(null);
   const [isDemoMode, setIsDemoMode] = useState(true);
-  const [uploadedFile, setUploadedFile] = useState(null);
 
-  const executeSearch = async (queryText, sourcesCount, demoModeOverride, fileOverride) => {
+  const executeSearch = async (queryText, sourcesCount, demoModeOverride) => {
     const q = (queryText !== undefined ? queryText : question).trim();
-    const activeFile = fileOverride !== undefined ? fileOverride : uploadedFile;
-    if (!q && !activeFile) return;
+    if (!q) return;
     if (isLoading) return;
 
     const sources = sourcesCount !== undefined ? sourcesCount : topK;
@@ -33,7 +31,7 @@ export default function App() {
     setHighlightedSource(null);
 
     try {
-      const data = await querySentinel(q, sources, useDemo, activeFile);
+      const data = await querySentinel(q, sources, useDemo);
       setResult(data);
     } catch (err) {
       setError({
@@ -49,43 +47,16 @@ export default function App() {
     executeSearch(question, topK, demoModeOverride);
   };
 
-  const handleFileUpload = (file) => {
-    setUploadedFile(file);
-    // Auto-update the question if it's empty, or if it was previously auto-filled with an analysis prompt
-    const isAutoPrompt =
-      !question.trim() ||
-      question.startsWith('Analyze ') ||
-      question.includes('and summarize clinical findings') ||
-      (uploadedFile && question.includes(uploadedFile.name));
-
-    if (isAutoPrompt) {
-      setQuestion(`Analyze ${file.name} and summarize clinical findings and medical significance`);
-    }
-  };
-
-  const handleFileRemove = () => {
-    if (
-      uploadedFile &&
-      (question === `Analyze ${uploadedFile.name} and summarize clinical findings and medical significance` ||
-       question.startsWith('Analyze '))
-    ) {
-      setQuestion('');
-    }
-    setUploadedFile(null);
-  };
-
   const handleSelectSample = (sample) => {
     setQuestion(sample.question);
     const k = sample.topK || topK;
     if (sample.topK) setTopK(sample.topK);
     setError(null);
-    // Immediately open and execute clinical search for the clicked topic
     executeSearch(sample.question, k);
   };
 
   const handleClear = () => {
     setQuestion('');
-    setUploadedFile(null);
     setTopK(3);
     setResult(null);
     setError(null);
@@ -148,9 +119,6 @@ export default function App() {
             onSubmit={handleSubmit}
             isLoading={isLoading}
             onClear={handleClear}
-            uploadedFile={uploadedFile}
-            onFileUpload={handleFileUpload}
-            onFileRemove={handleFileRemove}
           />
         </section>
 
@@ -182,11 +150,14 @@ export default function App() {
         {/* Search Results (Directly Below Search Bar) */}
         {result && !isLoading && (
           <section className="med-results-container">
-            {/* Unified Clinical Report Box: Verification + Score + Summary */}
+            {/* Unified Clinical Report Box: Verification + Score + Analytics + Summary */}
             <ClinicalReportCard
               answer={result.answer}
               decision={result.decision}
               faithfulnessProbability={result.faithfulness_probability}
+              unfaithfulnessProbability={result.unfaithfulness_probability}
+              metrics={result.metrics}
+              charts={result.charts}
               threshold={0.70}
               reason={result.reason}
               onSourceClick={handleSourceClick}
@@ -222,10 +193,10 @@ export default function App() {
               </div>
 
               <div className="pillar-card">
-                <div className="pillar-icon-box">🔍</div>
-                <h4>Complete Transparency</h4>
+                <div className="pillar-icon-box">📊</div>
+                <h4>Hallucination Analytics</h4>
                 <p>
-                  Every factual claim includes an interactive citation tag linking directly to the exact textbook passage it was derived from.
+                  Full mathematical transparency: view real-time faithfulness percentages and 3 interactive pie charts measuring hallucination risk and claim verification.
                 </p>
               </div>
             </div>

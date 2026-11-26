@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import FaithfulnessPieCharts from './FaithfulnessPieCharts';
 
 /**
  * Unified Clinical Report Card.
@@ -9,6 +10,9 @@ export default function ClinicalReportCard({
   answer,
   decision,
   faithfulnessProbability = 0,
+  unfaithfulnessProbability = 0,
+  metrics = null,
+  charts = null,
   threshold = 0.70,
   reason,
   onSourceClick,
@@ -460,6 +464,15 @@ export default function ClinicalReportCard({
           </div>
         </div>
       </div>
+
+      {/* AI Hallucination & Faithfulness Analytics with 2-3 Pie Charts */}
+      <FaithfulnessPieCharts
+        faithfulnessProbability={faithfulnessProbability}
+        unfaithfulnessProbability={unfaithfulnessProbability}
+        metrics={metrics}
+        charts={charts}
+        decision={decision}
+      />
 
       {/* Clean Horizontal Divider */}
       <div className="unified-card-divider" />
