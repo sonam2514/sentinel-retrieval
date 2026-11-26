@@ -2958,3 +2958,283 @@
     justify-content: flex-start;
   }
 }
+
+
+/* ==========================================================================
+   AI Hallucination & Faithfulness Analytics Dashboard (Pie / Donut Charts)
+   ========================================================================== */
+.hallucination-dashboard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1.25rem 0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+}
+
+.dashboard-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 1.25rem;
+}
+
+.dashboard-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.analytics-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.analytics-main-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.2rem 0;
+}
+
+.analytics-subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.dashboard-summary-pills {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.summary-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.summary-pill.faith-pill {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.summary-pill.hall-pill {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.summary-pill.hall-pill.pill-danger {
+  background: #ffe4e6;
+  color: #9f1239;
+  border: 1px solid #fda4af;
+  animation: pulse-border 2s infinite;
+}
+
+.pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.pill-dot.green {
+  background: #10b981;
+}
+
+.pill-dot.red {
+  background: #ef4444;
+}
+
+.pill-title {
+  font-weight: 500;
+  color: #475569;
+}
+
+/* 3 Charts Grid */
+.charts-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.chart-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chart-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  border-color: #cbd5e1;
+}
+
+.chart-card-header {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.chart-number-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.chart-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.chart-caption {
+  font-size: 0.75rem;
+  color: #64748b;
+  display: block;
+  margin-top: 2px;
+}
+
+/* Donut SVG & Labels */
+.donut-chart-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.donut-svg-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.5rem 0;
+}
+
+.donut-svg {
+  transform: rotate(0deg);
+  overflow: visible;
+}
+
+.donut-center-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  fill: #0f172a;
+  font-family: inherit;
+}
+
+.donut-center-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  fill: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: inherit;
+}
+
+/* Donut Legend */
+.donut-legend {
+  width: 100%;
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: #334155;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.legend-item:hover,
+.legend-item-active {
+  background: #e2e8f0;
+}
+
+.legend-color-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.legend-value {
+  font-weight: 700;
+  color: #0f172a;
+  margin-left: 0.5rem;
+}
+
+/* Footer note */
+.chart-footer-note {
+  width: 100%;
+  margin-top: 0.85rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.note-pass {
+  color: #059669;
+  font-weight: 600;
+}
+
+.note-fail {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.note-neutral {
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Responsive adjustments for pie charts */
+@media (max-width: 900px) {
+  .charts-grid-3 {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}

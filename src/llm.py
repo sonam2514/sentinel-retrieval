@@ -1,24 +1,45 @@
 """Grounded LLM integration for Sentinel.
 
-The LLM receives retrieved chunks and is explicitly restricted to those
-chunks. Ollama must be running locally, for example::
-
-    ollama run llama3.2:3b
+The LLM receives retrieved chunks from medical textbooks and is explicitly restricted to those
+chunks. Ollama can be running locally with models like llama3.2:3b, qwen3.5:4b, etc.
 """
 
 from __future__ import annotations
 
+import os
+import re
 from typing import Any, Mapping, Sequence
 
 import requests
 
 
-OLLAMA_URL = "http://localhost:11434"
-MODEL = "llama3.2:3b"
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
 
 
 class LLMError(RuntimeError):
     """Raised when the Ollama request fails."""
+
+
+def _detect_ollama_model(ollama_url: str = OLLAMA_URL, preferred: str = MODEL) -> str:
+    """Detects available model in Ollama. Uses preferred model if present,
+    otherwise chooses the first available local model (e.g. qwen3.5:4b)."""
+    try:
+        resp = requests.get(f"{ollama_url.rstrip('/')}/api/tags", timeout=2.0)
+        if resp.status_code == 200:
+            models = resp.json().get("models", [])
+            names = [m.get("name") for m in models if m.get("name")]
+            if names:
+                if preferred in names:
+                    return preferred
+                # Prefer models matching common LLM architectures
+                for n in names:
+                    if any(arch in n.lower() for arch in ("qwen", "llama", "mistral", "phi", "gemma")):
+                        return n
+                return names[0]
+    except Exception:
+        pass
+    return preferred
 
 
 def _build_context(chunks: Sequence[Mapping[str, Any]]) -> str:
@@ -38,7 +59,6 @@ def _generate_extractive_summary(
     """Generates a patient-friendly plain-English synthesis from the retrieved chunks
     when Ollama local LLM is offline or not responding."""
     patient_chunks = [c for c in chunks if c.get("is_patient_report")]
-    textbook_chunks = [c for c in chunks if not c.get("is_patient_report")]
 
     sections = []
 
@@ -94,7 +114,7 @@ def answer_question(
 ) -> str:
     """Generate an answer from retrieved chunks only.
 
-    ``chunks`` accepts the dictionaries returned by ``retrieve.retrieve`` or patient chunks.
+    ``chunks`` accepts the dictionaries returned by ``retrieve.retrieve``.
     """
     context = _build_context(chunks)
     if not context:
@@ -153,20 +173,26 @@ def answer_question(
     if not has_patient_doc and all(c.get("confidence") == "low" or c.get("is_out_of_domain") for c in chunks):
         return "I do not have enough evidence to answer this question. The query does not appear in the verified medical textbooks."
 
+    # Detect active model if the default is requested
+    resolved_model = model
+    if model == MODEL:
+        resolved_model = _detect_ollama_model(ollama_url, preferred=MODEL)
+
     client = session or requests.Session()
     try:
         response = client.post(
             f"{ollama_url.rstrip('/')}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=(1.5, timeout),
+            json={"model": resolved_model, "prompt": prompt, "stream": False},
+            timeout=(3.0, timeout),
         )
         response.raise_for_status()
-        answer = str(response.json()["response"]).strip()
+        raw_answer = str(response.json().get("response", "")).strip()
+        # Clean any reasoning tokens from thinking models (e.g. <think>...</think>)
+        answer = re.sub(r"<think>.*?</think>", "", raw_answer, flags=re.DOTALL).strip()
         if answer:
             return answer
     except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
-        # Fallback to extractive summary if Ollama is offline or timed out
-        print(f"[LLM] Ollama unavailable ({exc}), generating extractive clinical summary...")
+        print(f"[LLM] Ollama request to model '{resolved_model}' failed ({exc}), generating extractive clinical summary...")
         return _generate_extractive_summary(question, chunks)
 
     return _generate_extractive_summary(question, chunks)

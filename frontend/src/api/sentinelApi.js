@@ -205,7 +205,71 @@ Take it with meals (like breakfast or dinner) to prevent mild stomach upset, and
 /**
  * Returns a realistic simulated response after a brief delay.
  */
-function getSimulatedResponse(question, topK, uploadedFile = null) {
+
+/**
+ * Helper to compute 3 structured pie charts and metrics for simulation.
+ */
+function attachMockAnalytics(result) {
+  if (!result) return result;
+  const faithProb = typeof result.faithfulness_probability === 'number' ? result.faithfulness_probability : 0.85;
+  const unfaithProb = typeof result.unfaithfulness_probability === 'number' ? result.unfaithfulness_probability : Math.max(0, 1.0 - faithProb);
+  const isAbstain = result.decision === 'ABSTAIN';
+
+  const faithPct = Math.round(faithProb * 1000) / 10;
+  const hallPct = Math.round(unfaithProb * 1000) / 10;
+
+  const groundedClaimsPct = isAbstain ? 12.0 : Math.round(faithPct * 0.88 * 10) / 10;
+  const synthClaimsPct = isAbstain ? 8.0 : Math.round(faithPct * 0.12 * 10) / 10;
+  const hallClaimsPct = Math.round(Math.max(0, 100 - groundedClaimsPct - synthClaimsPct) * 10) / 10;
+
+  const contextCoveragePct = isAbstain ? 18.0 : Math.round(Math.min(98, faithPct * 0.95) * 10) / 10;
+  const infoGapPct = Math.round(Math.max(0, 100 - contextCoveragePct) * 10) / 10;
+
+  result.metrics = {
+    faithfulness_percent: faithPct,
+    hallucination_percent: hallPct,
+    grounded_claims_percent: groundedClaimsPct,
+    synthesized_claims_percent: synthClaimsPct,
+    hallucinated_claims_percent: hallClaimsPct,
+    context_coverage_percent: contextCoveragePct,
+    information_gap_percent: infoGapPct,
+  };
+
+  result.charts = [
+    {
+      id: 'faithfulness_vs_hallucination',
+      title: 'Faithfulness vs Hallucination',
+      caption: 'Overall factual reliability',
+      slices: [
+        { name: 'Faithful Grounding', value: faithPct, color: faithPct >= 70 ? '#10B981' : '#F59E0B' },
+        { name: 'Hallucination Risk', value: hallPct, color: '#EF4444' }
+      ]
+    },
+    {
+      id: 'sentence_claim_verification',
+      title: 'Sentence Claim Verification',
+      caption: 'Claim-level textbook alignment',
+      slices: [
+        { name: 'Directly Grounded', value: groundedClaimsPct, color: '#059669' },
+        { name: 'Supported Synthesis', value: synthClaimsPct, color: '#3B82F6' },
+        { name: 'Ungrounded / Speculative', value: hallClaimsPct, color: '#F43F5E' }
+      ]
+    },
+    {
+      id: 'textbook_context_utilization',
+      title: 'Textbook Context Utilization',
+      caption: 'Coverage from 18 medical books',
+      slices: [
+        { name: 'Textbook Context Used', value: contextCoveragePct, color: '#6366F1' },
+        { name: 'Information Gap', value: infoGapPct, color: '#94A3B8' }
+      ]
+    }
+  ];
+
+  return result;
+}
+
+function _rawSimulatedResponse(question, topK, uploadedFile = null) {
   // If a clinical file was uploaded, generate a dual-grounded response citing both the document and medical literature
   if (uploadedFile) {
     const fileName = uploadedFile.name || 'Clinical_Document.pdf';
@@ -387,40 +451,23 @@ If you are experiencing persistent, worsening, or unexplained symptoms, the safe
  * @param {File|null} [uploadedFile=null] - Optional clinical document (PDF or Image)
  * @returns {Promise<Object>} The Sentinel result object
  */
-export async function querySentinel(question, topK = 3, demoMode = false, uploadedFile = null) {
+export async function querySentinel(question, topK = 3, demoMode = false) {
   if (demoMode) {
-    // Simulate real pipeline processing time (1.2s)
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    return getSimulatedResponse(question, topK, uploadedFile);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return getSimulatedResponse(question, topK);
   }
 
   try {
-    let fetchOptions;
-
-    if (uploadedFile) {
-      // Use FormData for multipart file upload + question
-      const formData = new FormData();
-      formData.append('question', question.trim());
-      formData.append('top_k', String(topK));
-      formData.append('file', uploadedFile);
-
-      fetchOptions = {
-        method: 'POST',
-        body: formData,
-      };
-    } else {
-      // Standard JSON payload
-      fetchOptions = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: question.trim(),
-          top_k: Number(topK),
-        }),
-      };
-    }
+    const fetchOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        question: question.trim(),
+        top_k: Number(topK),
+      }),
+    };
 
     const response = await fetch(`${API_BASE_URL}/api/sentinel`, fetchOptions);
 
@@ -455,4 +502,10 @@ export async function querySentinel(question, topK = 3, demoMode = false, upload
     }
     throw err;
   }
+}
+
+
+function getSimulatedResponse(question, topK = 3) {
+  const raw = _rawSimulatedResponse(question, topK);
+  return attachMockAnalytics(raw);
 }

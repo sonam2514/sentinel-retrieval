@@ -1,6 +1,6 @@
 from src.retrieve import retrieve
 from src.llm import answer_question
-from src.faithfulness import check_faithfulness
+from src.faithfulness import check_faithfulness, compute_faithfulness_analytics
 from src.document_processor import extract_text_from_file, chunk_document_text
 
 FAITHFULNESS_THRESHOLD = 0.70
@@ -38,7 +38,6 @@ def sentinel(
     # Build search query for MedRAG textbook retrieval
     textbook_query = effective_question
     if patient_chunks:
-        # Extract first 150 chars of key patient findings to enrich search against MedRAG
         p_snippet = patient_chunks[0].get("text", "")[:200].replace("\n", " ")
         textbook_query = f"{effective_question} {p_snippet}".strip()
 
@@ -51,6 +50,11 @@ def sentinel(
     all_chunks = patient_chunks + medrag_chunks
 
     if not all_chunks:
+        abstain_metrics = compute_faithfulness_analytics(
+            "",
+            "No medical evidence was retrieved.",
+            {"label": "UNFAITHFUL", "faithfulness_probability": 0.0, "unfaithfulness_probability": 1.0}
+        )
         return {
             "question": effective_question,
             "retrieved_chunks": [],
@@ -59,6 +63,8 @@ def sentinel(
             "faithfulness_probability": 0.0,
             "unfaithfulness_probability": 1.0,
             "classifier_label": "UNFAITHFUL",
+            "metrics": abstain_metrics["metrics"],
+            "charts": abstain_metrics["charts"],
         }
 
     answer = answer_question(
@@ -107,6 +113,11 @@ def sentinel(
         faithfulness["faithfulness_probability"] = min(faithfulness["faithfulness_probability"], 0.15)
         faithfulness["unfaithfulness_probability"] = round(1.0 - faithfulness["faithfulness_probability"], 3)
         faithfulness["label"] = "UNFAITHFUL"
+        # Recompute analytics for abstention
+        recalculated = compute_faithfulness_analytics(context, answer, faithfulness)
+        faithfulness["metrics"] = recalculated["metrics"]
+        faithfulness["charts"] = recalculated["charts"]
+
         if is_abstain_text or all_low_confidence:
             reason = (
                 "Non-medical or out-of-domain query. Verified MedRAG textbooks contain no evidence. "
@@ -142,4 +153,6 @@ def sentinel(
             faithfulness.get("conformal_alpha"),
         "decision": decision,
         "reason": reason,
+        "metrics": faithfulness.get("metrics"),
+        "charts": faithfulness.get("charts"),
     }
