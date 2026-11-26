@@ -1,0 +1,13 @@
+{
+  "method": "split_conformal_classification",
+  "alpha": 0.1,
+  "target_marginal_coverage": 0.9,
+  "score": "1 - predicted probability assigned to the true class",
+  "quantile": 0.6580389738082886,
+  "calibration_size": 5000,
+  "calibration_source": "unused rows after the 30000-row training subset",
+  "labels": {
+    "0": "UNFAITHFUL",
+    "1": "FAITHFUL"
+  }
+}

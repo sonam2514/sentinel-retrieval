@@ -92,11 +92,14 @@ def sentinel(
         and all(c.get("confidence") == "low" or c.get("is_out_of_domain") for c in medrag_chunks)
     )
 
-    if (
-        not is_abstain_text
-        and not all_low_confidence
-        and faithfulness["faithfulness_probability"] >= FAITHFULNESS_THRESHOLD
-    ):
+    conformal_set = faithfulness.get("conformal_prediction_set")
+    passes_faithfulness_gate = (
+        conformal_set == ["FAITHFUL"]
+        if conformal_set is not None
+        else faithfulness["faithfulness_probability"] >= FAITHFULNESS_THRESHOLD
+    )
+
+    if not is_abstain_text and not all_low_confidence and passes_faithfulness_gate:
         decision = "ANSWER"
         reason = None
     else:
@@ -108,6 +111,12 @@ def sentinel(
             reason = (
                 "Non-medical or out-of-domain query. Verified MedRAG textbooks contain no evidence. "
                 "Sentinel automatically abstains to prevent ungrounded generation."
+            )
+        elif conformal_set is not None and conformal_set != ["FAITHFUL"]:
+            labels = ", ".join(conformal_set) if conformal_set else "no labels"
+            reason = (
+                f"Conformal prediction set is {{{labels}}}, not the singleton {{FAITHFUL}}. "
+                "Sentinel automatically abstains because the result is uncertain."
             )
         else:
             pct = round(faithfulness["faithfulness_probability"] * 100)
@@ -127,6 +136,10 @@ def sentinel(
             faithfulness["unfaithfulness_probability"],
         "classifier_label":
             faithfulness["label"],
+        "conformal_prediction_set":
+            faithfulness.get("conformal_prediction_set"),
+        "conformal_alpha":
+            faithfulness.get("conformal_alpha"),
         "decision": decision,
         "reason": reason,
     }
