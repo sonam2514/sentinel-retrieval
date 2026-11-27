@@ -4,6 +4,7 @@ from src.faithfulness import check_faithfulness, compute_faithfulness_analytics
 from src.document_processor import extract_text_from_file, chunk_document_text
 
 FAITHFULNESS_THRESHOLD = 0.70
+MIN_RETRIEVAL_SCORE = 0.020
 
 
 def sentinel(
@@ -63,6 +64,47 @@ def sentinel(
             "faithfulness_probability": 0.0,
             "unfaithfulness_probability": 1.0,
             "classifier_label": "UNFAITHFUL",
+            "metrics": abstain_metrics["metrics"],
+            "charts": abstain_metrics["charts"],
+        }
+
+    # Strict Context Validation: Short-circuit before calling Ollama if context is missing/low confidence
+    max_fusion_score = max((float(c.get("fusion_score", 0.0)) for c in all_chunks), default=0.0)
+    has_out_of_domain = any(c.get("is_out_of_domain") for c in medrag_chunks)
+    all_low_confidence = (
+        not patient_chunks
+        and (has_out_of_domain or all(c.get("confidence") == "low" for c in medrag_chunks))
+    )
+    insufficient_context = (not patient_chunks and (max_fusion_score < MIN_RETRIEVAL_SCORE or all_low_confidence))
+
+    if insufficient_context:
+        abstain_answer = (
+            "I do not have enough evidence to answer this question. "
+            "The query does not appear in the verified medical textbooks."
+        )
+        abstain_metrics = compute_faithfulness_analytics(
+            "",
+            abstain_answer,
+            {"label": "UNFAITHFUL", "faithfulness_probability": 0.0, "unfaithfulness_probability": 1.0}
+        )
+        abstain_reason = (
+            "Query is outside the medical domain or not documented in verified clinical textbooks. "
+            "Sentinel automatically abstains without generating ungrounded advice to prevent hallucination."
+            if has_out_of_domain
+            else "Insufficient verified medical evidence found (retrieval score below strict cutoff). "
+                 "Sentinel automatically abstains without calling Ollama to prevent hallucination."
+        )
+        return {
+            "question": effective_question,
+            "retrieved_chunks": all_chunks,
+            "answer": abstain_answer,
+            "faithfulness_probability": 0.0,
+            "unfaithfulness_probability": 1.0,
+            "classifier_label": "UNFAITHFUL",
+            "conformal_prediction_set": ["UNFAITHFUL"],
+            "conformal_alpha": 0.05,
+            "decision": "ABSTAIN",
+            "reason": abstain_reason,
             "metrics": abstain_metrics["metrics"],
             "charts": abstain_metrics["charts"],
         }

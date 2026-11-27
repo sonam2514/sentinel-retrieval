@@ -194,28 +194,70 @@ def _compute_confidence(top_distance, all_distances):
         return "low"
 
 
+ENGLISH_STOPWORDS = {
+    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and",
+    "any", "are", "aren", "as", "at", "be", "because", "been", "before", "being",
+    "below", "between", "both", "but", "by", "can", "cannot", "could", "couldn",
+    "did", "didn", "do", "does", "doesn", "doing", "don", "down", "during", "each",
+    "few", "for", "from", "further", "had", "hadn", "has", "hasn", "have", "haven",
+    "having", "he", "her", "here", "hers", "herself", "him", "himself", "his",
+    "how", "i", "if", "in", "into", "is", "isn", "it", "its", "itself", "just",
+    "ll", "m", "me", "might", "mightn", "more", "most", "must", "mustn", "my",
+    "myself", "no", "nor", "not", "now", "o", "of", "off", "on", "once", "only",
+    "or", "other", "our", "ours", "ourselves", "out", "over", "own", "re", "s",
+    "same", "shan", "she", "should", "shouldn", "so", "some", "such", "t", "than",
+    "that", "the", "their", "theirs", "them", "themselves", "then", "there", "these",
+    "they", "this", "those", "through", "to", "too", "under", "until", "up", "ve",
+    "very", "was", "wasn", "we", "were", "weren", "what", "when", "where", "which",
+    "while", "who", "whom", "why", "will", "with", "won", "would", "wouldn", "y",
+    "you", "your", "yours", "yourself", "yourselves", "fix", "tell", "help", "give", "make"
+}
+
+NON_MEDICAL_TERMS = {
+    "car", "engine", "vehicle", "automobile", "motor", "transmission", "mechanic",
+    "radiator", "tire", "tires", "brake", "brakes", "overheats", "overheating",
+    "oil change", "code", "coding", "python", "javascript", "software", "programming",
+    "capital of", "weather", "recipe", "cooking", "president", "movie", "sports",
+    "football", "cricket", "nfl", "flight", "airline", "stock market", "crypto"
+}
+
+MEDICAL_TERMS = {
+    "symptom", "disease", "cancer", "heart", "blood", "drug", "patient",
+    "therapy", "infection", "fever", "pain", "treatment", "medicine",
+    "lung", "brain", "kidney", "liver", "asthma", "diabetes", "insulin",
+    "glucose", "cholesterol", "pressure", "hypertension", "metformin",
+    "diagnos", "clinic", "patholog", "cough", "wheez", "breath", "sugar",
+    "hba1c", "anemia", "artery", "cardio", "pulmonary", "neuropathy",
+    "biopsy", "doctor", "health", "target", "dose", "statin", "scan"
+}
+
+
 def retrieve(question: str, top_k: int = 3):
     """
     Given a medical question, return the top_k most relevant chunks using
     hybrid retrieval (dense + BM25 combined via Reciprocal Rank Fusion),
     each annotated with an adaptive confidence label.
     """
-    if not HAS_FULL_INDEX or df is None:
-        # Intelligent fallback ranking across built-in accredited MedRAG textbook knowledge
-        q_lower = question.lower()
-        q_tokens = [w for w in re.split(r"\W+", q_lower) if len(w) >= 3]
+    q_lower = question.lower()
+    q_all_tokens = re.findall(r"\b[a-z0-9]+\b", q_lower)
+    q_content_tokens = [w for w in q_all_tokens if len(w) >= 3 and w not in ENGLISH_STOPWORDS]
 
+    is_explicit_non_medical = any(re.search(r"\b" + re.escape(term) + r"\b", q_lower) for term in NON_MEDICAL_TERMS)
+    has_medical_domain_term = any(any(m in tok for m in MEDICAL_TERMS) for tok in q_content_tokens)
+
+    if not HAS_FULL_INDEX or df is None:
         scored = []
         for chunk in _REFERENCE_TEXTBOOK_CHUNKS:
             match_score = 0
-            # Check keywords
+            # Whole-word keyword matching
             for kw in chunk.get("keywords", []):
-                if kw in q_lower:
+                if re.search(r"\b" + re.escape(kw) + r"\b", q_lower):
                     match_score += 4
-            # Check text overlap
-            chunk_text_lower = chunk["text"].lower()
-            for tok in q_tokens:
-                if tok in chunk_text_lower:
+
+            # Whole-word text overlap against content tokens (no substring matches)
+            chunk_word_set = set(re.findall(r"\b[a-z0-9]+\b", chunk["text"].lower()))
+            for tok in q_content_tokens:
+                if tok in chunk_word_set:
                     match_score += 1
 
             scored.append((match_score, chunk))
@@ -223,22 +265,12 @@ def retrieve(question: str, top_k: int = 3):
         scored.sort(key=lambda x: x[0], reverse=True)
         max_score = scored[0][0] if scored else 0
 
-        # Medical query domain validator
-        medical_terms = {
-            "symptom", "disease", "cancer", "heart", "blood", "drug", "patient",
-            "therapy", "infection", "fever", "pain", "treatment", "medicine",
-            "lung", "brain", "kidney", "liver", "asthma", "diabetes", "insulin",
-            "glucose", "cholesterol", "pressure", "hypertension", "metformin",
-            "diagnos", "clinic", "patholog", "cough", "wheez", "breath", "sugar",
-            "hba1c", "anemia", "artery", "cardio", "pulmonary", "neuropathy",
-            "biopsy", "doctor", "health", "target", "dose", "statin", "scan"
-        }
-        is_medical_query = any(any(m in tok for m in medical_terms) for tok in q_tokens)
+        # Strict Domain Gate:
+        # If the query is explicitly non-medical, or lacks any medical terms and has no chunk matches
+        is_out_of_domain = is_explicit_non_medical or (not has_medical_domain_term and max_score < 3)
 
-        results = []
-        if max_score <= 1 and not is_medical_query:
-            # Query is out-of-domain (e.g. "What is the capital of France?", "How to fix car engine")
-            # Flag with low confidence and minimal fusion score to trigger abstention
+        if is_out_of_domain or max_score == 0:
+            results = []
             for score, chunk in scored[:top_k]:
                 results.append({
                     "id": chunk["id"],
@@ -250,6 +282,7 @@ def retrieve(question: str, top_k: int = 3):
                 })
             return results
 
+        results = []
         for score, chunk in scored[:top_k]:
             conf = "high" if score >= 3 else ("medium" if score >= 1 else "low")
             results.append({
@@ -260,6 +293,18 @@ def retrieve(question: str, top_k: int = 3):
                 "confidence": conf,
             })
         return results
+
+    if is_explicit_non_medical or not has_medical_domain_term:
+        return [
+            {
+                "id": "out-of-domain-chunk",
+                "text": "The retrieved MedRAG clinical indices do not contain documentation for non-medical or non-clinical questions.",
+                "title": "MedRAG Reference Library",
+                "fusion_score": 0.0051,
+                "confidence": "low",
+                "is_out_of_domain": True,
+            }
+        ]
 
     dense_ids, distance_map = _dense_search(question, top_k=10)
     all_distances = list(distance_map.values())

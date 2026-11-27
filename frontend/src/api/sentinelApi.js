@@ -495,7 +495,7 @@ export async function querySentinel(question, topK = 3, demoMode = false) {
 
     if (isNetworkError) {
       const enhancedError = new Error(
-        'Backend server is not running on http://localhost:8000. Start the Python backend or switch to Demo Mode.'
+        'Backend server is not running on http://127.0.0.1:8000. Start the Python backend or switch to Demo Mode.'
       );
       enhancedError.isOffline = true;
       throw enhancedError;

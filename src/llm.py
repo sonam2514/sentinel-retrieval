@@ -15,6 +15,7 @@ import requests
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
+TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0.0"))
 
 
 class LLMError(RuntimeError):
@@ -70,8 +71,17 @@ def _generate_extractive_summary(
         return analyze_clinical_report(p_text, filename=filename)
     else:
         # Check if chunks are out of domain or low confidence without patient doc
-        all_low = all(c.get("confidence") == "low" or c.get("is_out_of_domain") for c in chunks)
-        if all_low:
+        has_out_of_domain = any(c.get("is_out_of_domain") for c in chunks)
+        all_low = all(c.get("confidence") == "low" for c in chunks)
+
+        # Check content relevance between query and retrieved chunks
+        q_words = set(re.findall(r"\b[a-z0-9]{3,}\b", question.lower()))
+        context_words = set(re.findall(r"\b[a-z0-9]{3,}\b", " ".join(str(c.get("text", "")) for c in chunks).lower()))
+        stopwords = {"how", "why", "what", "when", "where", "which", "the", "and", "for", "with", "from", "that", "this", "can", "will"}
+        meaningful_q_words = q_words - stopwords
+        has_relevant_overlap = bool(meaningful_q_words & context_words)
+
+        if has_out_of_domain or all_low or not has_relevant_overlap:
             return "I do not have enough evidence to answer this question. The query does not appear in the verified medical textbooks."
 
         # Standard query without document
@@ -108,8 +118,9 @@ def answer_question(
     chunks: Sequence[Mapping[str, Any]],
     *,
     model: str = MODEL,
+    temperature: float = TEMPERATURE,
     ollama_url: str = OLLAMA_URL,
-    timeout: float = 120.0,
+    timeout: float = 20.0,
     session: requests.Session | None = None,
 ) -> str:
     """Generate an answer from retrieved chunks only.
@@ -182,7 +193,15 @@ def answer_question(
     try:
         response = client.post(
             f"{ollama_url.rstrip('/')}/api/generate",
-            json={"model": resolved_model, "prompt": prompt, "stream": False},
+            json={
+                "model": resolved_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": temperature,
+                    "top_p": 0.1,
+                },
+            },
             timeout=(3.0, timeout),
         )
         response.raise_for_status()

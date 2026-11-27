@@ -477,19 +477,25 @@ export default function ClinicalReportCard({
       {/* Clean Horizontal Divider */}
       <div className="unified-card-divider" />
 
-      {/* 2. Bottom Section: Synthesized Clinical Summary */}
+      {/* 2. Bottom Section: Synthesized Clinical Summary or Abstention Guardrail */}
       <div className="unified-summary-section">
         <div className="answer-top-bar">
           <div className="answer-heading-group">
-            <span className="stethoscope-icon">🩺</span>
+            <span className="stethoscope-icon">{isAbstain ? '🛡️' : '🩺'}</span>
             <div>
               <div className="summary-title-row">
-                <h3 className="answer-main-title">Clinical Summary</h3>
-                <span className="plain-english-badge">✓ Plain-English Translation</span>
+                <h3 className="answer-main-title">
+                  {isAbstain ? 'AI Safety Guardrail Activated' : 'Clinical Summary'}
+                </h3>
+                {isAbstain ? (
+                  <span className="abstain-badge">🛑 Answer Safely Withheld</span>
+                ) : (
+                  <span className="plain-english-badge">✓ Plain-English Translation</span>
+                )}
               </div>
               <span className="answer-sub-caption">
                 {isAbstain
-                  ? 'Answer withheld by AI safety protocol'
+                  ? 'Sentinel refused to generate an ungrounded response to prevent AI hallucination'
                   : 'Explained in clear, everyday language & grounded in verified medical textbooks'}
               </span>
             </div>
@@ -499,7 +505,7 @@ export default function ClinicalReportCard({
             type="button"
             className="copy-summary-btn"
             onClick={handleCopy}
-            title="Copy this clinical summary"
+            title={isAbstain ? 'Copy safety explanation' : 'Copy this clinical summary'}
           >
             {copied ? (
               <>
@@ -514,20 +520,37 @@ export default function ClinicalReportCard({
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
-                <span>Copy Summary</span>
+                <span>{isAbstain ? 'Copy Notice' : 'Copy Summary'}</span>
               </>
             )}
           </button>
         </div>
 
         <div className="answer-prose">
-          {renderFormattedAnswer(answer)}
+          {isAbstain ? (
+            <div className="abstain-callout-card">
+              <div className="abstain-callout-header">
+                <span className="abstain-callout-badge">⚠️ Out-of-Domain / Insufficient Evidence</span>
+                <h4 className="abstain-callout-heading">Ungrounded AI Generation Blocked</h4>
+              </div>
+              <p className="abstain-callout-body">{answer}</p>
+              <div className="abstain-callout-details">
+                <strong>Why did Sentinel abstain?</strong>
+                <p>
+                  {reason ||
+                    'Sentinel is strictly confined to 18 accredited medical textbooks. When a question is non-medical, outside the clinical domain, or unsupported by medical literature, Sentinel refuses to answer to guarantee 0% hallucination risk.'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            renderFormattedAnswer(answer)
+          )}
         </div>
 
         <div className="answer-trust-note">
           <p>
             {isAbstain
-              ? '⚠️ Notice: Because accredited medical textbooks lacked conclusive evidence for this question, Sentinel withheld clinical guidance to prevent unverified advice.'
+              ? '🛡️ Safety Policy: Sentinel never speculates on topics beyond verified medical literature (such as automotive mechanics, programming, or everyday trivia).'
               : '💡 Interactive References: Click any "Ref" badge above to jump to the exact textbook passage it was derived from.'}
           </p>
         </div>
