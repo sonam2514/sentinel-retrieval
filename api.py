@@ -35,6 +35,19 @@ class QueryRequest(BaseModel):
     top_k: int = Field(default=3, ge=1, le=10, description="Number of evidence chunks to retrieve")
 
 
+@app.get("/")
+def root():
+    """Root endpoint to verify backend connectivity."""
+    return {
+        "status": "ok",
+        "service": "Sentinel Retrieval API",
+        "version": "1.1.0",
+        "docs": "/docs",
+        "health": "/api/health",
+        "frontend": "http://localhost:5173",
+    }
+
+
 @app.get("/api/health")
 def health_check():
     """Health check endpoint to verify backend connectivity."""
